@@ -42,7 +42,19 @@ def start_playback(mode: str, text: str, card_data: dict, track_details: Track, 
     :return: Amazon Alexa Response class
     :rtype: Response
     """
-
+    metadata = AudioItemMetadata(
+        title=track_details.title,
+        subtitle=track_details.artist,
+        art=display.Image(
+                content_description=track_details.title,
+                sources=[
+                    display.ImageInstance(
+                        url='https://github.com/navidrome/navidrome/raw/master/resources/logo-192x192.png'
+                    )
+                ]
+            )                                                              
+    )
+    
     if mode == 'play':
         # Starting playback
         logger.debug('In start_playback() - play mode')
@@ -67,7 +79,7 @@ def start_playback(mode: str, text: str, card_data: dict, track_details: Track, 
                         url=track_details.uri,
                         offset_in_milliseconds=track_details.offset,
                         expected_previous_token=None),
-                    metadata=add_screen_background(card_data) if card_data else None
+                    metadata=metadata
                 )
             )
         ).set_should_end_session(True)
