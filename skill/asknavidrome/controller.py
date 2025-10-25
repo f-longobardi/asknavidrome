@@ -107,7 +107,7 @@ def start_playback(mode: str, text: str, card_data: dict, track_details: Track, 
                         # if the Previous intent is used
                         offset_in_milliseconds=0,
                         expected_previous_token=track_details.previous_id),
-                    metadata=None
+                    metadata=metadata
                 )
             )
         ).set_should_end_session(True)
