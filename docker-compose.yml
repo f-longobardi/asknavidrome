@@ -10,7 +10,8 @@ services:
             - 'NAVI_PORT=443'
             - 'NAVI_API_PATH=/rest'
             - 'NAVI_API_VER=1.16.1'
-            - 'NAVI_DEBUG=1'              
+            - 'NAVI_DEBUG=1'
+            - 'LASTFM_APIKEY=<lastfm_api_key>'
         ports:
             - '5000:5000'
         image: 'ghcr.io/rosskouk/asknavidrome:latest'
