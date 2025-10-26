@@ -1,4 +1,6 @@
 import logging
+import os
+import requests
 from typing import Union
 
 from ask_sdk_core.handler_input import HandlerInput
@@ -42,18 +44,8 @@ def start_playback(mode: str, text: str, card_data: dict, track_details: Track, 
     :return: Amazon Alexa Response class
     :rtype: Response
     """
-    metadata = AudioItemMetadata(
-        title=track_details.title,
-        subtitle=track_details.artist,
-        art=display.Image(
-                content_description=track_details.title,
-                sources=[
-                    display.ImageInstance(
-                        url='https://github.com/navidrome/navidrome/raw/master/resources/logo-192x192.png'
-                    )
-                ]
-            )                                                              
-    )
+    
+    metadata = add_screen_background(track_details)
     
     if mode == 'play':
         # Starting playback
@@ -132,8 +124,70 @@ def stop(handler_input: HandlerInput) -> Response:
 
     return handler_input.response_builder.response
 
+def get_brainz_album_art(artist, album):
+        def fetch_cover_art_brainz(release_id):
+            # Cover Art Archive API endpoint
+            art_url = f"https://coverartarchive.org/release/{release_id}/"
+            try:
+                response = requests.get(art_url, timeout=3)
+                response.raise_for_status()
+            
+                data = response.json()
+                images = data.get('images', [])
+                if images:
+                    return images[0]['thumbnails']  # Return the first available cover art
+            except requests.exceptions.RequestException as e:
+                print(f"An error occurred while fetching cover art: {e}")
 
-def add_screen_background(card_data: dict) -> Union[AudioItemMetadata, None]:
+            return None
+        
+        brainz_url = "https://musicbrainz.org/ws/2/release/"
+        query = f"{brainz_url}?query=artist:{artist}+AND+release:{album}&fmt=json"
+        try: 
+            response = requests.get(query, timeout=3)
+            response.raise_for_status()
+            
+            data = response.json()
+            release_list = data.get('releases', [])
+            
+            if release_list:
+                release_id = release_list[0]['id']
+                cover_art = fetch_cover_art(release_id)
+                return cover_art
+        except requests.exceptions.Timeout:
+            print("The request timed out. Please try again.")
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+
+        return None
+        
+def get_lastfm_album_art(artist_name, album_name, api_key):
+        url = "http://ws.audioscrobbler.com/2.0/"
+        # Parameters for the API request
+        params = {
+            'method': 'album.getinfo',
+            'api_key': api_key,
+            'artist': artist_name,
+            'album': album_name,
+            'format': 'json'
+        }
+
+        try:
+            response = requests.get(url, params=params, timeout=2)
+            response.raise_for_status()  # Raise an error for bad responses
+
+            data = response.json()
+            if 'album' in data:
+                # Get the cover art URL
+                cover_art_url = data['album']['image'][-1]['#text']  # Get the largest image
+                return cover_art_url
+
+        except requests.exceptions.RequestException as e:
+            print(f"An error occurred: {e}")
+        
+        return None
+
+def add_screen_background(track_details: Track) -> Union[AudioItemMetadata, None]:
     """Add background to card.
 
     Cards are viewable on devices with screens and in the Alexa
@@ -145,26 +199,34 @@ def add_screen_background(card_data: dict) -> Union[AudioItemMetadata, None]:
     """
     logger.debug('In add_screen_background()')
 
-    if card_data:
+    if track_details:
+        # there are 2 ways to get cover art, musicBrainz or lastfm API
+    
+        api_key = os.getenv('LASTFM_APIKEY')
+
+        cover_art_url = get_lastfm_album_art(track_details.artist, track_details.album, api_key) if api_key else None
+        #cover_art_list = get_brainz_album_art(track_details.artist, track_details.album)
+
+
         metadata = AudioItemMetadata(
-            title=card_data['title'],
-            subtitle=card_data['text'],
+            title=track_details.title,
+            subtitle=track_details.artist,
             art=display.Image(
-                content_description=card_data['title'],
-                sources=[
-                    display.ImageInstance(
-                        url='https://github.com/navidrome/navidrome/raw/master/resources/logo-192x192.png'
-                    )
-                ]
-            ),
+                    content_description=track_details.album,
+                    sources=[
+                        display.ImageInstance(
+                            url= cover_art_url or 'https://github.com/navidrome/navidrome/raw/master/resources/logo-192x192.png'
+                        )
+                    ]
+                ),
             background_image=display.Image(
-                content_description=card_data['title'],
-                sources=[
-                    display.ImageInstance(
-                        url='https://github.com/navidrome/navidrome/raw/master/resources/logo-192x192.png'
-                    )
-                ]
-            )
+                    content_description=track_details.title,
+                    sources=[
+                        display.ImageInstance(
+                            url= cover_art_url or 'https://github.com/navidrome/navidrome/raw/master/resources/logo-192x192.png'
+                        )
+                    ]
+                )
         )
 
         return metadata
