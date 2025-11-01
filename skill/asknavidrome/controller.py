@@ -161,31 +161,65 @@ def get_brainz_album_art(artist, album):
 
         return None
         
-def get_lastfm_album_art(artist_name, album_name, api_key):
-        url = "http://ws.audioscrobbler.com/2.0/"
-        # Parameters for the API request
-        params = {
-            'method': 'album.getinfo',
-            'api_key': api_key,
-            'artist': artist_name,
-            'album': album_name,
-            'format': 'json'
-        }
+def get_lastfm_album_art(track_details: Track, api_key):
+    url = "http://ws.audioscrobbler.com/2.0/"
+    params = {
+        'method': 'album.getinfo' if track_details.album else 'track.getinfo',
+        'api_key': api_key,
+        'artist': track_details.artist,
+        'album': track_details.album,
+        'track': track_details.title,
+        'format': 'json'
+    }
 
-        try:
-            response = requests.get(url, params=params, timeout=2)
-            response.raise_for_status()  # Raise an error for bad responses
-
-            data = response.json()
-            if 'album' in data:
-                # Get the cover art URL
-                cover_art_url = data['album']['image'][-1]['#text']  # Get the largest image
-                return cover_art_url
-
-        except requests.exceptions.RequestException as e:
-            print(f"An error occurred: {e}")
+    try:
+        response = requests.get(url, params=params, timeout=2)
+        response.raise_for_status()
+        data = response.json()
+        if 'album' in data:
+            # Get the cover art URL from album
+            images = data['album'].get('image', [])
+            print("getting image from album")
+            print(track_details.album)
+            if images:
+                cover_art_url = images[-1].get('#text', '')
+                return cover_art_url if cover_art_url else None
+        elif 'track' in data:
+            # Get the cover art URL from track
+            images = data['track']['album'].get('image', [])
+            print("getting image from track")
+            print(track_details.title)
+            if images:
+                cover_art_url = images[-1].get('#text', '')
+                return cover_art_url if cover_art_url else None
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
         
-        return None
+    # Fallback to track.info
+    params = {
+        'method': 'track.getinfo',
+        'api_key': api_key,
+        'artist': track_details.artist,
+        'track': track_details.title,
+        'format': 'json'
+    }
+    try:
+        response = requests.get(url, params=params, timeout=2)
+        response.raise_for_status()
+        data = response.json()
+        if 'track' in data:
+            # Get the cover art URL from track
+            images = data['track']['album'].get('image', [])
+            print("getting image from track fallback")
+            print(track_details.title)
+            if images:
+                cover_art_url = images[-1].get('#text', '')
+                return cover_art_url if cover_art_url else None
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+
+    return None
 
 def add_screen_background(track_details: Track) -> Union[AudioItemMetadata, None]:
     """Add background to card.
@@ -204,7 +238,7 @@ def add_screen_background(track_details: Track) -> Union[AudioItemMetadata, None
     
         api_key = os.getenv('LASTFM_APIKEY')
 
-        cover_art_url = get_lastfm_album_art(track_details.artist, track_details.album, api_key) if api_key else None
+        cover_art_url = get_lastfm_album_art(track_details, api_key) if api_key else None
         #cover_art_list = get_brainz_album_art(track_details.artist, track_details.album)
 
 
