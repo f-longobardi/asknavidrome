@@ -284,7 +284,112 @@ class HelpHandler(AbstractRequestHandler):
 
         return handler_input.response_builder.response
 
+class NaviSonicPlayTopSongsByArtist(AbstractRequestHandler):
+    """Handle NaviSonicPlayTopSongsByArtist
 
+    Play a selection of songs for the given artist
+    """
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return is_intent_name('NaviSonicPlayTopSongsByArtist')(handler_input)
+
+    def handle(self, handler_input: HandlerInput) -> Response:
+        global backgroundProcess
+        logger.debug('In NaviSonicPlayTopSongsByArtist')
+
+        # Check if a background process is already running, if it is then terminate the process
+        # in favour of the new process.
+        if backgroundProcess is not None:
+            backgroundProcess.terminate()
+            backgroundProcess.join()
+
+        # Get the requested artist
+        artist = get_slot_value_v2(handler_input, 'artist')
+
+        # Search for an artist
+        artist_lookup = connection.search_artist(artist.value)
+
+        if artist_lookup is None:
+            text = sanitise_speech_output(f"I couldn't find the artist {artist.value} in the collection.")
+            handler_input.response_builder.speak(text).ask(text)
+
+            return handler_input.response_builder.response
+
+        else:
+            # Get artist id
+            #artist = artist_lookup[0].get('id')
+
+            # Build a list of songs to play
+            song_id_list = connection.build_best_song_list(artist.value, 10)
+            play_queue.clear()
+
+            controller.enqueue_songs(connection, play_queue, [song_id_list[0], song_id_list[1]])  # When generating the playlist return the first two tracks.
+            backgroundProcess = Process(target=queue_worker_thread, args=(connection, play_queue, song_id_list[2:]))  # Create a thread to enqueue the remaining tracks
+            backgroundProcess.start()  # Start the additional thread
+
+            speech = sanitise_speech_output(f'Playing best songs by: {artist.value}')
+            logger.info(speech)
+
+            card = {'title': 'AskNavidrome',
+                    'text': speech
+                    }
+
+            play_queue.shuffle()
+            track_details = play_queue.get_next_track()
+            return controller.start_playback('play', speech, card, track_details, handler_input)
+            
+class NaviSonicPlaySimilarSongs(AbstractRequestHandler):
+    """Handle NaviSonicPlaySimilarSongs
+
+    Play a selection of songs similar to current song
+    """
+
+    def can_handle(self, handler_input: HandlerInput) -> bool:
+        return is_intent_name('NaviSonicPlaySimilarSongs')(handler_input)
+
+    def handle(self, handler_input: HandlerInput) -> Response:
+        global backgroundProcess
+        logger.debug('In NaviSonicPlaySimilarSongs')
+
+        # Check if a background process is already running, if it is then terminate the process
+        # in favour of the new process.
+        if backgroundProcess is not None:
+            backgroundProcess.terminate()
+            backgroundProcess.join()
+
+        current_track = play_queue.get_current_track()
+        # Search for an artist
+        artist_lookup = connection.search_artist(current_track.artist)
+
+        if artist_lookup is None:
+            text = sanitise_speech_output(f"I couldn't find the artist {artist.value} in the collection.")
+            handler_input.response_builder.speak(text).ask(text)
+
+            return handler_input.response_builder.response
+
+        else:
+            # Get artist id
+            artist_id = artist_lookup[0].get('id')
+
+            # Build a list of songs to play
+            song_id_list = connection.get_similar_song_list(artist_id, min_song_count)
+            play_queue.clear()
+
+            controller.enqueue_songs(connection, play_queue, [song_id_list[0], song_id_list[1]])  # When generating the playlist return the first two tracks.
+            backgroundProcess = Process(target=queue_worker_thread, args=(connection, play_queue, song_id_list[2:]))  # Create a thread to enqueue the remaining tracks
+            backgroundProcess.start()  # Start the additional thread
+
+            speech = sanitise_speech_output(f'Playing songs similar to {current_track.title}')
+            logger.info(speech)
+
+            card = {'title': 'AskNavidrome',
+                    'text': speech
+                    }
+
+            play_queue.shuffle()
+            track_details = play_queue.get_next_track()
+            return controller.start_playback('play', speech, card, track_details, handler_input)
+            
 class NaviSonicPlayMusicByArtist(AbstractRequestHandler):
     """Handle NaviSonicPlayMusicByArtist
 
@@ -1107,6 +1212,8 @@ sb.add_request_handler(LaunchRequestHandler())
 sb.add_request_handler(CheckAudioInterfaceHandler())
 sb.add_request_handler(SkillEventHandler())
 sb.add_request_handler(HelpHandler())
+sb.add_request_handler(NaviSonicPlayTopSongsByArtist())
+sb.add_request_handler(NaviSonicPlaySimilarSongs())
 sb.add_request_handler(NaviSonicPlayMusicByArtist())
 sb.add_request_handler(NaviSonicPlayAlbumByArtist())
 sb.add_request_handler(NaviSonicPlaySongByArtist())
