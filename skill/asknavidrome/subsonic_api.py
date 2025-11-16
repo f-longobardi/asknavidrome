@@ -305,6 +305,53 @@ class SubsonicConnection:
         else:
             return None
 
+    def build_best_song_list(self, artist: str, count: int) -> Union[list, None]:
+        """Build a list of best songs by artist
+
+        :param str artist: The artist ID
+        :param int count: The number of songs to return
+        :return: A list of song IDs or None if no tracks are found.
+        :rtype: list | None
+        """
+
+        self.logger.debug('In function build_best_song_list()')
+        random_songs = self.conn.getTopSongs(artist,count)
+
+        songs = random_songs.get('topSongs').get('song')
+
+        if len(songs) > 0:
+            song_id_list = [song.get('id') for song in songs]
+
+            return song_id_list
+
+        else:
+            return None
+            
+    
+    def get_similar_song_list(self, id: str, count: int) -> Union[list, None]:
+        """Build a list of songs similar to the current
+
+        :param str id: The artist ID or song ID
+        :param int count: The number of songs to return
+        :return: A list of song IDs or None if no tracks are found.
+        :rtype: list | None
+        """
+
+        self.logger.debug('In function get_similar_song_list()')
+        random_songs = self.conn.getSimilarSongs(id,count)
+
+        songs = random_songs.get('similarSongs').get('song')
+        random.shuffle(songs)
+        
+        if len(songs) > 0:
+            song_id_list = [song.get('id') for song in songs]
+
+            return song_id_list
+
+        else:
+            return None
+            
+    
     def build_random_song_list(self, count: int) -> Union[list, None]:
         """Build a shuffled list of random songs
 
